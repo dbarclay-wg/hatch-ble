@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+kill -2 $(cat ble.py.pid)
+
