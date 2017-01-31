@@ -23,7 +23,9 @@ DEFAULT_DEV_INDEX = 0
 
 class BLE:
     
-    def __init__(self):
+    def __init__(self, helpmode=False):
+        if (helpmode):
+            return None
         self.ble = AdaBLE.get_provider()
         print("Initializing Bluetooth...")
         self.ble.initialize()
@@ -39,6 +41,30 @@ class BLE:
         self.logfile = None
         self.inputpipe = None
         self.inputpipename = None
+
+    def print_help(self=None):
+        print(
+'''
+Module: BLE
+invocation:
+    $ python ble.py [<log filename> [<pipe filename>]]
+
+This module supports logging data streamed off a Hatch BLE UART device.
+This module supports writing to the BLE UART via a named pipe file.
+
+All data recieved from the UART is appended to the log file.
+
+All data written to the named pipe is sent to the UART. Each line has
+ '\\r\\n' appended to it before it is sent. Data should be written line
+ by line, in ASCII format. (newlines are stripped from the original line)
+For example,
+
+    $ echo "#A" >> bleinput
+
+ will send "#A\\r\\n" to the paired UART.
+
+'''
+)
 
     def blecleanup(self):
         try:
@@ -246,6 +272,11 @@ class BLE:
 
 
 if (__name__ == "__main__"):
+    if (len(sys.argv) > 1):
+        ble = BLE(helpmode=True)
+        if (sys.argv[1] == "help"):
+            ble.print_help()
+        exit()
     ble = BLE()
     try:
         ble.run()
