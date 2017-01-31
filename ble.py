@@ -21,6 +21,9 @@ RX_CHAR_UUID      = uuid.UUID('6E400003-B5A3-F393-E0A9-E50E24DCCA9E')
 DEFAULT_SCANTIME = 10
 DEFAULT_DEV_INDEX = 0
 
+DEFAULT_LOGFILE = "ble_log_{}.txt"
+DEFAULT_PIPEFILE = "bleinput"
+
 class BLE:
     
     def __init__(self, helpmode=False):
@@ -210,6 +213,9 @@ For example,
             
         return None
 
+    def output_send(self, message):
+        self.tx.write_value(message + "\r\n")
+
     def run(self):
         self.ble.run_mainloop_with(self.main)
     
@@ -265,7 +271,8 @@ For example,
                 line = self.input_read()
                 if (line != None):
                     print("Input: " + line)
-
+                    self.output_send(line)
+        
         except:
             self.cleanup()
         
@@ -273,10 +280,10 @@ For example,
 
 if (__name__ == "__main__"):
     if (len(sys.argv) > 1):
-        ble = BLE(helpmode=True)
         if (sys.argv[1] == "help"):
+            ble = BLE(helpmode=True)
             ble.print_help()
-        exit()
+            exit()
     ble = BLE()
     try:
         ble.run()
