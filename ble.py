@@ -23,12 +23,16 @@ DEFAULT_DEV_INDEX = 0
 
 DEFAULT_LOGFILE = "ble_log_{}.txt"
 DEFAULT_PIPEFILE = "bleinput"
+DEFAULT_PIDFILE = "ble.py.pid"
 
 class BLE:
     
     def __init__(self, helpmode=False):
         if (helpmode):
             return None
+        self.pid = os.getpid()
+        print("python started on pid  {}".format(self.pid))
+        self.writepidfile()
         self.ble = AdaBLE.get_provider()
         print("Initializing Bluetooth...")
         self.ble.initialize()
@@ -90,9 +94,23 @@ For example,
         try:
             print("Closing and removing pipe...")
             self.inputpipe.close()
-        finally:
+        except:
+            pass
+        try:
             os.remove(self.inputpipename)
+        except:
+            pass
+        try:
+            print("Deleting pidfile")
+            os.remove(DEFAULT_PIDFILE)
+        except:
+            pass
         self.ble.run_mainloop_with(self.blecleanup)
+    
+    def writepidfile(self):
+        f = open(DEFAULT_PIDFILE, 'w')
+        f.write("{}\n".format(self.pid))
+        f.close()
     
     def scan(self, timeout=30, terminator=False, internaltimeout=5):
         print("Scanning for UART devices ({}s)".format(timeout))

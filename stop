@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
 
-kill -2 $(cat ble.py.pid)
+# Sends an interrupt signal to the process indicated by the pid file
+
+if [ $1 ]; then
+    if [ ! -e "$1" ]; then
+        echo "usage:  stop [pidfile]"
+    else
+        kill -2 "$(head -n 1 $1)"
+    fi
+else
+    kill -2 "$(head -n 1 ble.py.pid)"
+fi
 
