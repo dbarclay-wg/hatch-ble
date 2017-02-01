@@ -16,7 +16,8 @@ echo "done."
 echo "Executing ble.py..."
 echo
 
-python ble.py
+echo "python ble.py $@"
+python ble.py $@
 
 echo 
 echo -n "Resetting bluetooth... "

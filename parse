@@ -1,0 +1,25 @@
+#!/usr/bin/env python
+
+import sys, os
+
+f = open(sys.argv[1], 'r')
+w = open(sys.argv[2], 'w')
+
+line = f.readline()
+while (line != ''):
+    if (line.startswith("#0")):
+        l = line.strip('#').rstrip().split('_')
+        xyz = l[2].split('-')
+        w.write("{},{},{},{},{},{},{},{}\n".format(
+            int(l[0], 16),
+            int(l[1], 16),
+            int(xyz[0], 16),
+            int(xyz[1], 16),
+            int(xyz[2], 16),
+            int(l[3][0]),
+            int(l[3][1]),
+            int(l[4], 16)
+            )
+        )
+    line = f.readline()
+

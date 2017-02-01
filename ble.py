@@ -7,6 +7,7 @@ from Adafruit_BluefruitLE.services import UART
 
 import sys
 import os
+import argparse
 import select
 import time
 import uuid
@@ -25,32 +26,6 @@ DEFAULT_LOGFILE = "ble_log_{}.txt"
 DEFAULT_PIPEFILE = "bleinput"
 DEFAULT_PIDFILE = "ble.py.pid"
 
-class BLE:
-    
-    def __init__(self, helpmode=False):
-        if (helpmode):
-            return None
-        self.pid = os.getpid()
-        print("python started on pid  {}".format(self.pid))
-        self.writepidfile()
-        self.ble = AdaBLE.get_provider()
-        print("Initializing Bluetooth...")
-        self.ble.initialize()
-        self.adapter = None
-        self.device = None
-        self.found_devices = []
-        
-        self.uart = None
-        self.rx = None
-        self.tx = None
-        self.rxbuf = []
-
-        self.logfile = None
-        self.inputpipe = None
-        self.inputpipename = None
-
-    def print_help(self=None):
-        print(
 '''
 Module: BLE
 invocation:
@@ -66,13 +41,43 @@ All data written to the named pipe is sent to the UART. Each line has
  by line, in ASCII format. (newlines are stripped from the original line)
 For example,
 
-    $ echo "#A" >> bleinput
+    $ echo "A" >> bleinput
 
- will send "#A\\r\\n" to the paired UART.
+ will send "A\\r\\n" to the paired UART.
 
 '''
-)
+class BLE:
+    
+    def __init__(self, scantime=None, devname=None, devaddr=None,
+            logfname=DEFAULT_LOGFILE, pipefname=DEFAULT_PIPEFILE, 
+            pidfname=DEFAULT_PIDFILE):
+        self.adapter = None
+        self.device = None
+        self.found_devices = []
+        
+        self.uart = None
+        self.rx = None
+        self.tx = None
+        self.rxbuf = []
+        self.txbuf = []
+        
+        self.scantime = scantime
+        self.devname = devname
+        self.devaddr = devaddr
+        
+        self.logfile = None # file type opbject
+        self.logfname = logfname
+        self.inputpipe = None # fdopen type object
+        self.inputpipename = pipefname
+        self.pidfilename = pidfname
 
+        self.pid = os.getpid()
+        print("python started on pid  {}".format(self.pid))
+        self.writepidfile()
+        self.ble = AdaBLE.get_provider()
+        print("Initializing Bluetooth...")
+        self.ble.initialize()
+        
     def blecleanup(self):
         try:
             print("Disconnecting Device...")
@@ -102,13 +107,13 @@ For example,
             pass
         try:
             print("Deleting pidfile")
-            os.remove(DEFAULT_PIDFILE)
+            os.remove(self.pidfilename)
         except:
             pass
         self.ble.run_mainloop_with(self.blecleanup)
     
     def writepidfile(self):
-        f = open(DEFAULT_PIDFILE, 'w')
+        f = open(self.pidfilename, 'w')
         f.write("{}\n".format(self.pid))
         f.close()
     
@@ -175,13 +180,38 @@ For example,
         else:
             fname = "ble_log_{}.txt".format(int(time.time()))
         self.logfile = open(fname, 'w')
+        self.logfile.flush()
+        self.csvfile = open(fname.strip(".txt") + ".csv", 'w')
+        self.logfilereader = open(fname, 'r')
 
     def log_close(self):
         self.logfile.close()
+        self.csvfile.close()
 
     def log(self, string):
         self.logfile.write(string)
         self.logfile.flush()
+        
+        line = self.logfilereader.readline()
+        
+        if (line.startswith("#0")):
+            #try:
+            l = line.strip('#').rstrip().split('_')
+            xyz = l[2].split('-')
+            converted = ("{},{},{},{},{},{},{},{}\n".format(
+                    int(l[0], 16),
+                    int(l[1], 16),
+                    int(xyz[0], 16),
+                    int(xyz[1], 16),
+                    int(xyz[2], 16),
+                    int(l[3][0]),
+                    int(l[3][1]),
+                    int(l[4], 16) ))
+
+            self.csvfile.write(converted)
+            self.csvfile.flush()
+            #except:
+            #    pass
 
     def input_open(self):
         if (len(sys.argv) > 2):
@@ -232,7 +262,11 @@ For example,
         return None
 
     def output_send(self, message):
-        self.tx.write_value(message + "\r\n")
+        try:
+            self.tx.write_value(message + "\r\n")
+            return True
+        except:
+            return False
 
     def run(self):
         self.ble.run_mainloop_with(self.main)
@@ -251,13 +285,15 @@ For example,
         # Disconnect currently connected devices
         UART.disconnect_devices()
 
-        inptstr = "Enter scan time in seconds [{}]:".format(DEFAULT_SCANTIME)
-        inpt = raw_input(inptstr)
-        try:
-            scantime = int(inpt)
-        except ValueError:
-            scantime = DEFAULT_SCANTIME
-        self.scan(scantime)
+        # Scan for available devices
+        if (self.scantime is None): # If not set by command line
+            inptstr = "Enter scan time in seconds [{}]:".format(DEFAULT_SCANTIME)
+            inpt = raw_input(inptstr)
+            try:
+                self.scantime = int(inpt)
+            except ValueError:
+                self.scantime = DEFAULT_SCANTIME
+        self.scan(self.scantime)
         if (len(self.found_devices) == 0):
             print("No UARTS found! STOPPING!!")
             return None
@@ -279,30 +315,84 @@ For example,
             
             self.init_uart()
             self.uart_start_read()
-            
+
+            rxstr = ""
             while True:
-                if (len(self.rxbuf) > 0):
-                    rxstr = self.rxbuf.pop()
-                    self.log(rxstr)
+            
+                # Build string until it has a newline,
+                #  then log it.
+                if (len(self.rxbuf) > 0): 
+                    rxstr += self.rxbuf.pop()
+#                    print(repr(rxstr))
+                    if (rxstr.endswith("\n")):
+                        self.log(rxstr)
+                        rxstr = ""
                     time.sleep(0.01)
                 
                 line = self.input_read()
                 if (line != None):
                     print("Input: " + line)
-                    self.output_send(line)
+                    self.txbuf.insert(0, line)
+
+                good = True
+                while ((len(self.txbuf) > 0) and good):
+                    line = self.txbuf[-1]
+                    good = self.output_send(line) # set good False if bad
+                    if (good):
+                        self.txbuf.pop()
+                
+                if (not self.device.is_connected):
+                    self.device.connect()
         
-        except:
+        except KeyboardInterrupt:
             self.cleanup()
         
 
 
 if (__name__ == "__main__"):
-    if (len(sys.argv) > 1):
-        if (sys.argv[1] == "help"):
-            ble = BLE(helpmode=True)
-            ble.print_help()
-            exit()
-    ble = BLE()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--time", nargs=1, type=int, 
+        help="number of seconds to scan for (without overheads)")
+    parser.add_argument("-b", "--addr", nargs=1, type=str, 
+        help="address of device to connect to")
+    parser.add_argument("-n", "--name", nargs=1, type=str, 
+        help="name of device to connect to (case sensitive)")
+    parser.add_argument("-l", "--log", nargs=1, type=str, 
+        help="file to log output data to")
+    parser.add_argument("-p", "--pipename", nargs=1, type=str, 
+        help="filename to assign to input pipe")
+    args = parser.parse_args()
+
+    #time
+    scantime = DEFAULT_SCANTIME
+    if (args.time is not None):
+        scantime = args.time[0]
+    #log
+    logfname = DEFAULT_LOGFILE
+    if (args.log is not None):
+        logfname = args.log
+    #pipe
+    pipefname = DEFAULT_PIPEFILE
+    if (args.pipename is not None):
+        pipefname = args.pipename
+    #addr
+    scanaddr = args.addr
+    #name
+    scanname = args.name
+
+    print(repr(args))
+    print(repr(type(args.pipename)))
+    print(scantime)
+    print(logfname)
+    print(pipefname)
+    print(scanaddr)
+    print(scanname)
+    
+    #exit()
+
+    ble = BLE(scantime=scantime, devname=scanname, devaddr=scanaddr,
+            logfname=logfname, pipefname=pipefname)
     try:
         ble.run()
     except:

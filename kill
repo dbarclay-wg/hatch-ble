@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+# Sends an interrupt signal to the process indicated by the pid file
+
+if [ $1 ]; then
+    if [ ! -e "$1" ]; then
+        echo "usage:  stop [pidfile]"
+    else
+        kill "$(head -n 1 $1)"
+    fi
+else
+    kill "$(head -n 1 ble.py.pid)"
+fi
+
