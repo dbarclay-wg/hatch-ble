@@ -1,0 +1,102 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+import sys, os, time
+
+MAX_INT16 = 32767
+
+
+class BLEParser:
+    
+    def __init__(self, infilename, outfilename):
+        self.infile = open(infilename, 'r')
+        self.outfile = open(outfilename, 'w')
+        self.linebuf = ""
+        self.hashflag = False
+    
+    # Writes a line to the output file and flushes the local buffer
+    def writeline(self, line):
+        self.outfile.write(line)
+        self.outfile.flush()
+    
+    def close(self):
+        self.infile.close()
+        self.outfile.close()
+    
+    # Converts a line to a formatted CSV entry
+    def convert(self, line):
+        try:
+            l = line.split('_')
+            xyz = l[2].split('-')
+            for i in range(len(xyz)):
+                val = int(xyz[i], 16)
+                if (val > MAX_INT16):
+                    val -= 65536
+                xyz[i] = val
+                
+            s = ("{},{},{},{},{},{},{},{}\n".format(
+                int(l[0], 16),
+                int(l[1], 16),
+                xyz[0],
+                xyz[1],
+                xyz[2],
+                int(l[3][0]),
+                int(l[3][1]),
+                int(l[4], 16)
+                )
+            )
+            return s
+        except IndexError:
+            pass
+        except ValueError:
+            pass
+        except AttributeError:
+            pass
+        return None
+    
+    # Reads a line from the input file, and outputs a parsed line string,
+    #  or None, if no input lines were successfully parsed.
+    def parseline(self):
+        line = self.infile.readline()
+        output = None
+        for char in line:
+            if (self.hashflag):
+                # If we get a # while in # mode
+                if (char == '#'):
+                    # Throw away current buffer
+                    self.linebuf = ""
+                # If we got newline in # mode
+                elif (char == '\n'):
+                    # set line for return
+                    output = self.linebuf
+                    # Exit # mode
+                    self.hashmode = False
+                # Any other char in # mode
+                else:
+                    # Add to current buffer
+                    self.linebuf = "".join([self.linebuf, char])
+            else: # not in # mode
+                # If got # while not in # mode
+                if (char == '#'):
+                    # Go into # mode
+                    self.hashflag = True
+        return output
+    
+    def main(self):
+        try:
+            while True:
+                line = self.parseline()
+                line = self.convert(line)
+                if (line is not None):
+                    self.writeline(line)
+        except KeyboardInterrupt:
+            print("Got keyboard interrupt, stopping...", file=sys.stderr)
+            pass
+        self.close()
+        
+
+
+if (__name__ == "__main__"):
+    parser = BLEParser(sys.argv[1], sys.argv[2])
+    parser.main()
+
