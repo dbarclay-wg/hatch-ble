@@ -7,17 +7,22 @@ git clone https://github.com/adafruit/Adafruit_Python_BluefruitLE
 wget http://www.kernel.org/pub/linux/bluetooth/bluez-5.37.tar.gz
 
 
-tar -xzfv bluez-5.37.tar.gz
+tar -xzf bluez-5.37.tar.gz
 cd bluez-5.37
 ./configure
 make
-sudo make install
+sudo make -j4 install
 sudo make clean
-REGEX="s/\/usr\/lib\/bluetooth\/bluetoothd[ ]*\$/\/usr\/lib\/bluetooth\/bluetoothd --experimental/g"
-sudo sed -i /lib/systemd/system/bluetooth.service -e $REGEX
+sudo sed -i /lib/systemd/system/bluetooth.service -e "s/\/usr\/lib\/bluetooth\/bluetoothd[ ]*\$/\/usr\/lib\/bluetooth\/bluetoothd --experimental/g"
+sudo sed -i /lib/systemd/system/bluetooth.service -e "s/\/usr\/local\/libexec\/bluetooth\/bluetoothd[ ]*\$/\/usr\/local\/libexec\/bluetooth\/bluetoothd --experimental/g"
 cd ..
 
 cd Adafruit_Python_BluefruitLE
 sudo python2 setup.py install
+sudo python2 setup.py clean
 cd ..
+
+sudo systemctl daemon-reload
+
+sudo systemctl restart bluetooth
 
